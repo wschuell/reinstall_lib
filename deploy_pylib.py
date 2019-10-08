@@ -2,7 +2,7 @@
 import subprocess
 import os
 
-libname = 
+libname = 'reinstall_lib'
 
 
 with open('setup.py','r') as f:
@@ -17,18 +17,18 @@ with open('setup.py','w') as f:
 
 print('Edit setup.py if you want to provide URL, author info, and description')
 
-cmd_list = [
-		'git add PYLIB/__init__.py',
-		'git add PYLIB/_version.py',
-		'git mv PYLIB '+libname,
-		'git add tests/testmodule/__init__.py',
-		'git add tests/testmodule/test_basic.py',
-		'git add .gitignore',
+cmd_list = [	'ls -al',
+#		'git add PYLIB/__init__.py',
+#		'git add PYLIB/_version.py',
+#		'git mv PYLIB '+libname,
+#		'git add tests/testmodule/__init__.py',
+#		'git add tests/testmodule/test_basic.py',
+#		'git add .gitignore',
 		'git add .travis.yml',
 		'git add pytest.ini',
 		'git add setup.py',
 		'git add requirements.txt',
-		"git commit -am 'Deploying pylib'",
+		"git commit -am 'Deploying_pylib'",
 
 		]
 
@@ -36,7 +36,8 @@ for cmd in cmd_list:
 	print('--------------')
 	print(cmd)
 	print('')
-	ans = subprocess.check_output(cmd)
+	cmd2 = cmd.split(' ')
+	ans = subprocess.check_output(cmd2)
 	print(ans)
 
 
