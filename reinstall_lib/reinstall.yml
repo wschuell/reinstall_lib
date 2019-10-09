@@ -1,0 +1,12 @@
+- type: CmdStep
+  config: 
+    cmd: "ls -l"
+- type: MultiAPTStep
+  config:
+    packages: 
+      - zip
+      - unzip
+      - tar
+- type: MultiAPTStep
+  config:
+    packages: xxx fzefzef azef-azeftg
