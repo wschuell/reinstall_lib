@@ -1,6 +1,8 @@
 - type: CmdStep
   config: 
-    cmd: "ls -l"
+    cmd: ls -l
+
+
 - type: MultiAPTStep
   config:
     packages: 

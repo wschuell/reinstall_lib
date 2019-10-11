@@ -3,9 +3,16 @@ import yaml
 import time
 import hashlib
 import subprocess
+import sys
+
+if sys.version_info[0] == 3:
+	raw_input = input
 
 def get_steps(s):
-	step = globals()[s['type']](**s['config'])
+	if "config" in s.keys():
+		step = globals()[s['type']](**s['config'])
+	else:
+		step = globals()[s['type']]()
 	return step.child_steps
 
 
@@ -65,7 +72,11 @@ class Step(object):
 				return False
 
 	def splitted_cmd(self):
-		return self.cmd.split(' ')
+		if not hasattr(self,'doublequotes') or not self.doublequotes or '"' not in self.cmd:
+			return self.cmd.split(' ')
+		else:
+			splits = self.cmd.split('"')
+			return splits[0].split(' ')+['"'+splits[1]+'"']+splits[2].split(' ')
 
 
 class ReinstallProcess(object):
@@ -108,8 +119,9 @@ class ReinstallProcess(object):
 
 
 class CmdStep(Step):
-	def __init__(self,cmd,**kwargs):
+	def __init__(self,cmd,doublequotes=False,**kwargs):
 		self.cmd = cmd
+		self.doublequotes = doublequotes
 		Step.__init__(self,**kwargs)
 
 	def execute(self):
@@ -121,6 +133,14 @@ class CmdStep(Step):
 			self.success = False
 			self.output = str(e)
 
+class PauseStep(Step):
+	def __init__(self,message='Continue? Any key (Y) or Ctrl-C (N)',**kwargs):
+		self.message = message
+		Step.__init__(self,**kwargs)
+
+	def execute(self):
+		self.output = raw_input(self.message)
+		self.success = True
 
 ####### APT
 
@@ -155,21 +175,13 @@ class APTrepoStep(CmdStep):#add key?
 	def __init__(self,repo):
 		self.repo = repo
 		cmd = 'sudo apt-add-repository -y install '+repo
-		CmdStep.__init__(self,cmd=cmd,no_redo=True)
-
-	def splitted_cmd(self):
-		if '"' not in self.cmd:
-			return CmdStep.splitted_cmd(self.cmd)
-		else:
-			splits = self.cmd.plit('"')
-			return CmdStep.splitted_cmd(splits[0])+['"'+splits[1]+'"']+CmdStep.splitted_cmd(splits[2])
+		CmdStep.__init__(self,cmd=cmd,no_redo=True,doublequotes=True)
 
 class APTrepoUndoStep(APTrepoStep):
 	def __init__(self,repo):
 		self.repo = repo
 		cmd = 'sudo apt-add-repository --remove '+repo
 		CmdStep.__init__(self,cmd=cmd,no_redo=True)
-
 
 
 
@@ -182,10 +194,23 @@ class MultiAPTUndoStep(MultiAPTStep):
 	def get_child_steps(self):
 		self.child_steps = [APTUndoStep(package = p) for p in self.packages ]
 
+class PackageDLStep(CmdStep):
+	def __init__(self,url):
+		self.package = url.split('/')[-1]
+		self.url = url
+		cmd = 'wget '+url+' && sudo dpkg -i '+self.package+' && rm '+self.package
+		CmdStep.__init__(self,cmd=cmd)
+
+class PackageDpkgStep(CmdStep):
+	def __init__(self,where):
+		self.package = where.split('/')[-1]
+		self.where = where
+		cmd = 'sudo dpkg -i '+self.package
+		CmdStep.__init__(self,cmd=cmd)
 
 ####### PIP and Python
 
-class PIPStep(CmdStep):#2 or 3 or both
+class PipStep(CmdStep):#2 or 3 or both
 	def __init__(self,package,version=3,both=False):
 		if version not in [2,3]:
 			raise ValueError('pip version should be 2 or 3')
@@ -208,11 +233,11 @@ class PIPStep(CmdStep):#2 or 3 or both
 		else:
 			self.child_steps = [self]
 
-class PIPUndoStep(PIPStep):
+class PipUndoStep(PipStep):
 	def gen_cmd(self):
 		return 'sudo pip'+self.version+' uninstall '+package
 
-class MultiPIPStep(PIPStep):
+class MultiPipStep(PipStep):
 	def __init__(self,packages,version=3,both=False):
 		self.packages = packages
 		self.version = version
@@ -220,11 +245,11 @@ class MultiPIPStep(PIPStep):
 		Step.__init__(self)
 
 	def get_child_steps(self):
-		self.child_steps = [PIPStep(package = p,both=self.both,version=self.version) for p in self.packages ]
+		self.child_steps = [PipStep(package = p,both=self.both,version=self.version) for p in self.packages ]
 
-class MultiPIPUndoStep(MultiPIPStep):
+class MultiPipUndoStep(MultiPipStep):
 	def get_child_steps(self):
-		self.child_steps = [PIPUndoStep(package = p,version=self.version,both=self.both) for p in self.packages ]
+		self.child_steps = [PipUndoStep(package = p,version=self.version,both=self.both) for p in self.packages ]
 
 
 
