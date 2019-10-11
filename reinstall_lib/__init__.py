@@ -9,12 +9,15 @@ if sys.version_info[0] == 3:
 	raw_input = input
 
 def get_steps(s):
-	if "config" in s.keys():
-		step = globals()[s['type']](**s['config'])
-	else:
-		step = globals()[s['type']]()
-	return step.child_steps
-
+	try:
+		if "config" in s.keys():
+			step = globals()[s['type']](**s['config'])
+		else:
+			step = globals()[s['type']]()
+		return step.child_steps
+	except:
+		print(s)
+		raise
 
 class Step(object):
 	def __init__(self,no_redo=False):
@@ -43,8 +46,8 @@ class Step(object):
 
 	def process(self):
 		if self.no_redo:
-			with open(os.environ['HOME']+'/.reinstall_lib/no_redo', 'a'):
-				f.write(self.id+'   '+self.cmd)
+			with open(os.environ['HOME']+'/.reinstall_lib/no_redo', 'a') as f:
+				f.write(self.id_string+'   '+self.cmd)
 		self.exec_date = time.strftime('%Y-%m-%d_%H-%M-%S')
 		if not self.no_redo or not self.check_executed():
 			self.execute()
@@ -61,7 +64,7 @@ class Step(object):
 		self.id_string = hashlib.md5(self.cmd.encode()).hexdigest()
 
 	def check_executed(self):
-		if not os.exists(self.no_redo_file):
+		if not os.path.exists(self.no_redo_file):
 			return False
 		else:
 			with open(self.no_redo_file,'r') as f:
@@ -127,11 +130,16 @@ class CmdStep(Step):
 	def execute(self):
 		cmd2 = self.splitted_cmd()
 		try:
-			self.output = subprocess.check_output(cmd2).decode('utf-8')
+			print('===========')
+			print(self.cmd)
+			print('===========')
+			# self.output = subprocess.check_output(cmd2).decode('utf-8')
+			self.output = subprocess.check_call(self.cmd,shell=True,stderr=subprocess.STDOUT)#.decode('utf-8')
 			self.success = True
-		except Exception as e:
+		except subprocess.CalledProcessError as e:
 			self.success = False
-			self.output = str(e)
+			self.output = str(e)+'\nOutput:\n'+str(e.output)#.decode('utf-8')
+		print(self.output)
 
 class PauseStep(Step):
 	def __init__(self,message='Continue? Any key (Y) or Ctrl-C (N)',**kwargs):
@@ -144,12 +152,12 @@ class PauseStep(Step):
 
 ####### APT
 
-class APTUpdate(CmdStep):
+class AptUpdate(CmdStep):
 	def __init__(self):
 		cmd = 'sudo apt-get -y update'
 		CmdStep.__init__(self,cmd=cmd)
 
-class APTUpgrade(CmdStep):
+class AptUpgrade(CmdStep):
 	def __init__(self):
 		cmd = 'sudo apt-get -y upgrade'
 		CmdStep.__init__(self,cmd=cmd)
@@ -172,13 +180,19 @@ class MultiAPTStep(APTStep):
 
 
 class APTrepoStep(CmdStep):#add key?
-	def __init__(self,repo):
+	def __init__(self,repo,need_double_quotes=False):
+		self.need_double_quotes = need_double_quotes
+		if self.need_double_quotes and repo[0]!='"':
+			repo = '"'+repo+'"'
 		self.repo = repo
-		cmd = 'sudo apt-add-repository -y install '+repo
+		cmd = 'sudo apt-add-repository '+repo
 		CmdStep.__init__(self,cmd=cmd,no_redo=True,doublequotes=True)
 
 class APTrepoUndoStep(APTrepoStep):
-	def __init__(self,repo):
+	def __init__(self,repo,need_double_quotes=False):
+		self.need_double_quotes = need_double_quotes
+		if self.need_double_quotes and repo[0]!='"':
+			repo = '"'+repo+'"'
 		self.repo = repo
 		cmd = 'sudo apt-add-repository --remove '+repo
 		CmdStep.__init__(self,cmd=cmd,no_redo=True)
@@ -221,7 +235,7 @@ class PipStep(CmdStep):#2 or 3 or both
 		CmdStep.__init__(self,cmd=cmd)
 
 	def gen_cmd(self):
-		return 'sudo pip'+self.version+' -U install '+package
+		return 'sudo pip'+str(self.version)+' -U install '+self.package
 
 	def get_child_steps(self):
 		if self.both:
@@ -235,7 +249,7 @@ class PipStep(CmdStep):#2 or 3 or both
 
 class PipUndoStep(PipStep):
 	def gen_cmd(self):
-		return 'sudo pip'+self.version+' uninstall '+package
+		return 'sudo pip'+int(self.version)+' uninstall '+self.package
 
 class MultiPipStep(PipStep):
 	def __init__(self,packages,version=3,both=False):
